@@ -8,6 +8,7 @@ package gocsv
 
 import (
 	"bytes"
+	"context"
 	"encoding/csv"
 	"fmt"
 	"io"
@@ -36,7 +37,7 @@ var TagName = "csv"
 // TagSeparator defines seperator string for multiple csv tags in struct fields
 var TagSeparator = ","
 
-// FieldSeperator defines how to combine parent struct with child struct
+// FieldsCombiner defines how to combine parent struct with child struct
 var FieldsCombiner = "."
 
 // Normalizer is a function that takes and returns a string. It is applied to
@@ -214,7 +215,7 @@ func Unmarshal(in io.Reader, out interface{}) error {
 	return readTo(newSimpleDecoderFromReader(in), out)
 }
 
-// Unmarshal parses the CSV from the reader in the interface.
+// UnmarshalWithErrorHandler parses the CSV from the reader in the interface.
 func UnmarshalWithErrorHandler(in io.Reader, errHandle ErrorHandler, out interface{}) error {
 	return readToWithErrorHandler(newSimpleDecoderFromReader(in), errHandle, out)
 }
@@ -278,19 +279,19 @@ func UnmarshalCSVToMap(in CSVReader, out interface{}) error {
 
 // UnmarshalToChan parses the CSV from the reader and send each value in the chan c.
 // The channel must have a concrete type.
-func UnmarshalToChan(in io.Reader, c interface{}) error {
+func UnmarshalToChan(ctx context.Context, in io.Reader, c interface{}) error {
 	if c == nil {
 		return fmt.Errorf("goscv: channel is %v", c)
 	}
-	return readEach(newSimpleDecoderFromReader(in), nil, c)
+	return readEach(ctx, newSimpleDecoderFromReader(in), nil, c)
 }
 
 // UnmarshalToChanWithErrorHandler parses the CSV from the reader in the interface.
-func UnmarshalToChanWithErrorHandler(in io.Reader, errorHandler ErrorHandler, c interface{}) error {
+func UnmarshalToChanWithErrorHandler(ctx context.Context, in io.Reader, errorHandler ErrorHandler, c interface{}) error {
 	if c == nil {
 		return fmt.Errorf("goscv: channel is %v", c)
 	}
-	return readEach(newSimpleDecoderFromReader(in), errorHandler, c)
+	return readEach(ctx, newSimpleDecoderFromReader(in), errorHandler, c)
 }
 
 // UnmarshalToChanWithoutHeaders parses the CSV from the reader and send each value in the chan c.
@@ -304,28 +305,28 @@ func UnmarshalToChanWithoutHeaders(in io.Reader, c interface{}) error {
 
 // UnmarshalDecoderToChan parses the CSV from the decoder and send each value in the chan c.
 // The channel must have a concrete type.
-func UnmarshalDecoderToChan(in SimpleDecoder, c interface{}) error {
+func UnmarshalDecoderToChan(ctx context.Context, in SimpleDecoder, c interface{}) error {
 	if c == nil {
 		return fmt.Errorf("goscv: channel is %v", c)
 	}
-	return readEach(in, nil, c)
+	return readEach(ctx, in, nil, c)
 }
 
 // UnmarshalStringToChan parses the CSV from the string and send each value in the chan c.
 // The channel must have a concrete type.
-func UnmarshalStringToChan(in string, c interface{}) error {
-	return UnmarshalToChan(strings.NewReader(in), c)
+func UnmarshalStringToChan(ctx context.Context, in string, c interface{}) error {
+	return UnmarshalToChan(ctx, strings.NewReader(in), c)
 }
 
 // UnmarshalBytesToChan parses the CSV from the bytes and send each value in the chan c.
 // The channel must have a concrete type.
-func UnmarshalBytesToChan(in []byte, c interface{}) error {
-	return UnmarshalToChan(bytes.NewReader(in), c)
+func UnmarshalBytesToChan(ctx context.Context, in []byte, c interface{}) error {
+	return UnmarshalToChan(ctx, bytes.NewReader(in), c)
 }
 
 // UnmarshalToCallback parses the CSV from the reader and send each value to the given func f.
 // The func must look like func(Struct).
-func UnmarshalToCallback(in io.Reader, f interface{}) error {
+func UnmarshalToCallback(ctx context.Context, in io.Reader, f interface{}) error {
 	valueFunc := reflect.ValueOf(f)
 	t := reflect.TypeOf(f)
 	if t.NumIn() != 1 {
@@ -334,10 +335,12 @@ func UnmarshalToCallback(in io.Reader, f interface{}) error {
 	cerr := make(chan error)
 	c := reflect.MakeChan(reflect.ChanOf(reflect.BothDir, t.In(0)), 0)
 	go func() {
-		cerr <- UnmarshalToChan(in, c.Interface())
+		cerr <- UnmarshalToChan(ctx, in, c.Interface())
 	}()
 	for {
 		select {
+		case <-ctx.Done():
+			return context.Canceled
 		case err := <-cerr:
 			return err
 		default:
@@ -359,7 +362,7 @@ func UnmarshalToCallback(in io.Reader, f interface{}) error {
 
 // UnmarshalDecoderToCallback parses the CSV from the decoder and send each value to the given func f.
 // The func must look like func(Struct).
-func UnmarshalDecoderToCallback(in SimpleDecoder, f interface{}) error {
+func UnmarshalDecoderToCallback(ctx context.Context, in SimpleDecoder, f interface{}) error {
 	valueFunc := reflect.ValueOf(f)
 	t := reflect.TypeOf(f)
 	if t.NumIn() != 1 {
@@ -368,10 +371,12 @@ func UnmarshalDecoderToCallback(in SimpleDecoder, f interface{}) error {
 	cerr := make(chan error)
 	c := reflect.MakeChan(reflect.ChanOf(reflect.BothDir, t.In(0)), 0)
 	go func() {
-		cerr <- UnmarshalDecoderToChan(in, c.Interface())
+		cerr <- UnmarshalDecoderToChan(ctx, in, c.Interface())
 	}()
 	for {
 		select {
+		case <-ctx.Done():
+			return context.Canceled
 		case err := <-cerr:
 			return err
 		default:
@@ -387,14 +392,14 @@ func UnmarshalDecoderToCallback(in SimpleDecoder, f interface{}) error {
 
 // UnmarshalBytesToCallback parses the CSV from the bytes and send each value to the given func f.
 // The func must look like func(Struct).
-func UnmarshalBytesToCallback(in []byte, f interface{}) error {
-	return UnmarshalToCallback(bytes.NewReader(in), f)
+func UnmarshalBytesToCallback(ctx context.Context, in []byte, f interface{}) error {
+	return UnmarshalToCallback(ctx, bytes.NewReader(in), f)
 }
 
 // UnmarshalStringToCallback parses the CSV from the string and send each value to the given func f.
 // The func must look like func(Struct).
-func UnmarshalStringToCallback(in string, c interface{}) (err error) {
-	return UnmarshalToCallback(strings.NewReader(in), c)
+func UnmarshalStringToCallback(ctx context.Context, in string, c interface{}) (err error) {
+	return UnmarshalToCallback(ctx, strings.NewReader(in), c)
 }
 
 // UnmarshalToCallbackWithError parses the CSV from the reader and
@@ -404,7 +409,7 @@ func UnmarshalStringToCallback(in string, c interface{}) (err error) {
 // parser and propagate the error to caller.
 //
 // The func must look like func(Struct) error.
-func UnmarshalToCallbackWithError(in io.Reader, f interface{}) error {
+func UnmarshalToCallbackWithError(ctx context.Context, in io.Reader, f interface{}) error {
 	valueFunc := reflect.ValueOf(f)
 	t := reflect.TypeOf(f)
 	if t.NumIn() != 1 {
@@ -420,12 +425,14 @@ func UnmarshalToCallbackWithError(in io.Reader, f interface{}) error {
 	cerr := make(chan error)
 	c := reflect.MakeChan(reflect.ChanOf(reflect.BothDir, t.In(0)), 0)
 	go func() {
-		cerr <- UnmarshalToChan(in, c.Interface())
+		cerr <- UnmarshalToChan(ctx, in, c.Interface())
 	}()
 
 	var fErr error
 	for {
 		select {
+		case <-ctx.Done():
+			return context.Canceled
 		case err := <-cerr:
 			if err != nil {
 				return err
@@ -464,8 +471,8 @@ func UnmarshalToCallbackWithError(in io.Reader, f interface{}) error {
 // parser and propagate the error to caller.
 //
 // The func must look like func(Struct) error.
-func UnmarshalBytesToCallbackWithError(in []byte, f interface{}) error {
-	return UnmarshalToCallbackWithError(bytes.NewReader(in), f)
+func UnmarshalBytesToCallbackWithError(ctx context.Context, in []byte, f interface{}) error {
+	return UnmarshalToCallbackWithError(ctx, bytes.NewReader(in), f)
 }
 
 // UnmarshalStringToCallbackWithError parses the CSV from the string and
@@ -475,8 +482,8 @@ func UnmarshalBytesToCallbackWithError(in []byte, f interface{}) error {
 // parser and propagate the error to caller.
 //
 // The func must look like func(Struct) error.
-func UnmarshalStringToCallbackWithError(in string, c interface{}) (err error) {
-	return UnmarshalToCallbackWithError(strings.NewReader(in), c)
+func UnmarshalStringToCallbackWithError(ctx context.Context, in string, c interface{}) (err error) {
+	return UnmarshalToCallbackWithError(ctx, strings.NewReader(in), c)
 }
 
 // CSVToMap creates a simple map from a CSV of 2 columns.

@@ -1,6 +1,7 @@
 package gocsv
 
 import (
+	"context"
 	"encoding/csv"
 	"errors"
 	"fmt"
@@ -246,7 +247,7 @@ func readToWithErrorHandler(decoder Decoder, errHandler ErrorHandler, out interf
 	return nil
 }
 
-func readEach(decoder SimpleDecoder, errHandler ErrorHandler, c interface{}) error {
+func readEach(ctx context.Context, decoder SimpleDecoder, errHandler ErrorHandler, c interface{}) error {
 	outValue, outType := getConcreteReflectValueAndType(c) // Get the concrete type (not pointer)
 	if outType.Kind() != reflect.Chan {
 		return fmt.Errorf("cannot use %v with type %s, only channel supported", c, outType)
@@ -291,6 +292,12 @@ func readEach(decoder SimpleDecoder, errHandler ErrorHandler, c interface{}) err
 	}
 	i := 0
 	for {
+		select {
+		case <-ctx.Done():
+			return context.Canceled
+		default:
+			break
+		}
 		line, err := decoder.GetCSVRow()
 		if err == io.EOF {
 			break

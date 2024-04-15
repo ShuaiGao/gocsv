@@ -2,6 +2,7 @@ package gocsv
 
 import (
 	"bytes"
+	"context"
 	"encoding/csv"
 	"errors"
 	"io"
@@ -296,7 +297,7 @@ ff,gg,22,hh,ii,jj`)
 	e := make(chan error)
 	var samples []SkipFieldSample
 	go func() {
-		if err := readEach(d, nil, c); err != nil {
+		if err := readEach(context.Background(), d, nil, c); err != nil {
 			e <- err
 		}
 	}()
@@ -372,7 +373,7 @@ kk,ll,ab,mm,nn,oo
 	e := make(chan error)
 	var samples []SkipFieldSample
 	go func() {
-		if err := readEach(d, errHandler, c); err != nil {
+		if err := readEach(context.Background(), d, errHandler, c); err != nil {
 			e <- err
 		}
 	}()
@@ -562,7 +563,7 @@ e,3,b`)
 	c := make(chan Sample)
 	e := make(chan error)
 	go func() {
-		if err := readEach(d, nil, c); err != nil {
+		if err := readEach(context.Background(), d, nil, c); err != nil {
 			e <- err
 		}
 	}()
@@ -592,7 +593,7 @@ e,3,b`)
 	c = make(chan Sample)
 	e = make(chan error)
 	go func() {
-		if err := readEach(d, nil, c); err == nil {
+		if err := readEach(context.Background(), d, nil, c); err == nil {
 			e <- err
 		}
 	}()
@@ -616,7 +617,7 @@ func TestUnmarshalToCallback(t *testing.T) {
 aa,bb,11,cc,dd,ee
 ff,gg,22,hh,ii,jj`)
 	var samples []SkipFieldSample
-	if err := UnmarshalBytesToCallback(b.Bytes(), func(s SkipFieldSample) {
+	if err := UnmarshalBytesToCallback(context.Background(), b.Bytes(), func(s SkipFieldSample) {
 		samples = append(samples, s)
 	}); err != nil {
 		t.Fatal(err)
@@ -1020,7 +1021,7 @@ f,1,baz,,        *string
 e,3,b,,                            `)
 
 	var samples []Sample
-	if err := UnmarshalDecoderToCallback(&trimDecoder{LazyCSVReader(b)}, func(s Sample) {
+	if err := UnmarshalDecoderToCallback(context.Background(), &trimDecoder{LazyCSVReader(b)}, func(s Sample) {
 		samples = append(samples, s)
 	}); err != nil {
 		t.Fatal(err)

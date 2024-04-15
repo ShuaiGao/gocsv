@@ -11,7 +11,7 @@ API and techniques inspired from https://godoc.org/gopkg.in/mgo.v2
 Installation
 =====
 
-```go get -u github.com/gocarina/gocsv```
+```go get -u github.com/ShuaiGao/gocsv```
 
 Full example
 =====

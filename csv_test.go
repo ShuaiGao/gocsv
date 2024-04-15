@@ -1,6 +1,7 @@
 package gocsv
 
 import (
+	"context"
 	"errors"
 	"testing"
 )
@@ -8,18 +9,19 @@ import (
 func TestUnmarshalToCallback_ReaderError(t *testing.T) {
 	type Dummy struct{}
 	var reader = &errorReader{}
+	ctx := context.Background()
 
-	err := UnmarshalToCallback(reader, func(Dummy) {})
+	err := UnmarshalToCallback(ctx, reader, func(Dummy) {})
 	if !errors.Is(err, readerErr) {
 		t.Error("UnmarshalToCallback should return first reader error")
 	}
 
-	err = UnmarshalDecoderToCallback(newSimpleDecoderFromReader(reader), func(Dummy) {})
+	err = UnmarshalDecoderToCallback(ctx, newSimpleDecoderFromReader(reader), func(Dummy) {})
 	if !errors.Is(err, readerErr) {
 		t.Error("UnmarshalDecoderToCallback should return first reader error")
 	}
 
-	err = UnmarshalToCallbackWithError(reader, func(Dummy) error { return nil })
+	err = UnmarshalToCallbackWithError(ctx, reader, func(Dummy) error { return nil })
 	if !errors.Is(err, readerErr) {
 		t.Error("UnmarshalToCallbackWithError should return first reader error")
 	}
