@@ -8,7 +8,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/gocarina/gocsv"
+	"github.com/ShuaiGao/gocsv"
 )
 
 type NotUsed struct {

@@ -38,7 +38,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/gocarina/gocsv"
+	"github.com/ShuaiGao/gocsv"
 )
 
 type NotUsed struct {
